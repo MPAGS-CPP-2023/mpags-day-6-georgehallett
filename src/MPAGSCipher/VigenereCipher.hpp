@@ -7,6 +7,7 @@
 #include "CipherType.hpp"
 
 #include <map>
+#include <stdexcept>
 #include <string>
 
 /**

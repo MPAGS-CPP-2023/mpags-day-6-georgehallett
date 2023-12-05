@@ -3,11 +3,15 @@
 #include "CipherType.hpp"
 #include "ProcessCommandLine.hpp"
 #include "TransformChar.hpp"
-
+#include "VigenereCipher.hpp"
 #include <algorithm>
+#include <chrono>
 #include <fstream>
+#include <future>
 #include <iostream>
+#include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 int main(int argc, char* argv[])
@@ -19,13 +23,18 @@ int main(int argc, char* argv[])
     ProgramSettings settings{false, false, "", "", {}, {}, CipherMode::Encrypt};
 
     // Process command line arguments
-    const bool cmdLineStatus{processCommandLine(cmdLineArgs, settings)};
+    try {
+        processCommandLine(cmdLineArgs, settings);
+    } catch (const MissingArgument& e) {
+        std::cerr << "[error] Missing argument: " << e.what() << std::endl;
+        return 1;
+    } catch (const UnknownArgument& e) {
+        std::cerr << "[error] Unknown argument: " << e.what() << std::endl;
+        return 1;
+    }
 
     // Any failure in the argument processing means we can't continue
     // Use a non-zero return value to indicate failure
-    if (!cmdLineStatus) {
-        return 1;
-    }
 
     // Handle help, if requested
     if (settings.helpRequested) {
@@ -94,9 +103,16 @@ int main(int argc, char* argv[])
     std::vector<std::unique_ptr<Cipher>> ciphers;
     std::size_t nCiphers{settings.cipherType.size()};
     ciphers.reserve(nCiphers);
+
     for (std::size_t iCipher{0}; iCipher < nCiphers; ++iCipher) {
-        ciphers.push_back(CipherFactory::makeCipher(
-            settings.cipherType[iCipher], settings.cipherKey[iCipher]));
+        try {
+            ciphers.push_back(CipherFactory::makeCipher(
+                settings.cipherType[iCipher], settings.cipherKey[iCipher]));
+
+        } catch (const InvalidKey& e) {
+            std::cerr << "[error] Invalid Key: " << e.what() << std::endl;
+            return 1;
+        }
 
         // Check that the cipher was constructed successfully
         if (!ciphers.back()) {
@@ -113,7 +129,48 @@ int main(int argc, char* argv[])
 
     // Run the cipher(s) on the input text, specifying whether to encrypt/decrypt
     for (const auto& cipher : ciphers) {
-        cipherText = cipher->applyCipher(cipherText, settings.cipherMode);
+        if (std::find(settings.cipherType.begin(), settings.cipherType.end(),
+                      CipherType::Caesar) != settings.cipherType.end()) {
+            // numThreads can be set to any value here
+            const std::size_t numThreads{4};
+
+            const std::size_t chunkSize = cipherText.size() / numThreads;
+
+            std::vector<std::future<std::string>> futures;
+
+            for (std::size_t i = 0; i < numThreads; ++i) {
+                std::size_t start = i * chunkSize;
+                std::size_t end = (i == numThreads - 1) ? cipherText.size()
+                                                        : (i + 1) * chunkSize;
+
+                futures.push_back(
+                    std::async(std::launch::async, [&ciphers, &cipherText,
+                                                    &settings, start, end]() {
+                        std::string chunk =
+                            cipherText.substr(start, end - start);
+                        // Send each chunk of caesar to applyCipher
+                        chunk = ciphers.front()->applyCipher(
+                            chunk, settings.cipherMode);
+                        return chunk;
+                    }));
+            }
+            // Wait for futures to finish using chrono module for timings
+            for (auto& future : futures) {
+                auto status = future.wait_for(std::chrono::seconds(1));
+                while (status != std::future_status::ready) {
+                    status = future.wait_for(std::chrono::seconds(2));
+                }
+            }
+
+            cipherText = "";
+
+            for (auto& future : futures) {
+                cipherText += future.get();
+            }
+        } else {
+            // For Vigenere and Playfair
+            cipherText = cipher->applyCipher(cipherText, settings.cipherMode);
+        }
     }
 
     // Output the encrypted/decrypted text to stdout/file
