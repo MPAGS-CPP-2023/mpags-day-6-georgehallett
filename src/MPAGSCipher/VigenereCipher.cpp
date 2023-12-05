@@ -26,12 +26,7 @@ void VigenereCipher::setKey(const std::string& key)
 
     // Check that the key is not now empty
     if (key_.empty()) {
-        // If it is we would ideally throw an exception to indicate a problem (see Day 6)
-        // For now we'll just set it to be some default value and print a warning
-        key_ = "VIGENEREEXAMPLE";
-        std::cerr
-            << "[warning] key provide to VigenereCipher is empty, setting it to the default: "
-            << key_ << std::endl;
+        throw InvalidKey{"Key provided to VigenereCipher is empty"};
     }
 
     // Loop through the key

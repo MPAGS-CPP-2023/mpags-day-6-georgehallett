@@ -4,6 +4,7 @@
 #include "CipherMode.hpp"
 #include "CipherType.hpp"
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -42,5 +43,15 @@ struct ProgramSettings {
  */
 bool processCommandLine(const std::vector<std::string>& cmdLineArgs,
                         ProgramSettings& settings);
+
+class MissingArgument : public std::invalid_argument {
+  public:
+    MissingArgument(const std::string& msg) : std::invalid_argument{msg} {}
+};
+
+class UnknownArgument : public std::invalid_argument {
+  public:
+    UnknownArgument(const std::string& msg) : std::invalid_argument{msg} {}
+};
 
 #endif    // MPAGSCIPHER_PROCESSCOMMANDLINE_HPP

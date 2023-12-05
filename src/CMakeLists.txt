@@ -29,5 +29,7 @@ add_subdirectory(Testing)
 
 # - Declare the build of mpags-cipher main program
 #   and link it to the MPAGSCipher library
+find_package( Threads )
 add_executable(mpags-cipher mpags-cipher.cpp)
 target_link_libraries(mpags-cipher PRIVATE MPAGSCipher)
+target_link_libraries(mpags-cipher PRIVATE MPAGSCipher Threads::Threads)
